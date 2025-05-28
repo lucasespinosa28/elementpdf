@@ -24,6 +24,8 @@
                 "<all_urls>"
             ],
             "js": [
+                "lib/html2canvas.min.js",
+                "lib/jspdf.umd.min.js",
                 "content.js"
             ],
             "css": [
@@ -34,7 +36,8 @@
     "web_accessible_resources": [
         {
             "resources": [
-                "jspdf.min.js"
+                "lib/html2canvas.min.js",
+                "lib/jspdf.umd.min.js"
             ],
             "matches": [
                 "<all_urls>"

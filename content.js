@@ -3,27 +3,15 @@
 
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'startSelection') {
-        startElementSelection();
-        sendResponse({ success: true });
-    }
-});
-
-// Make the convertElementToPDF function available globally
-window.convertElementToPDF = convertElementToPDF;
-
-// Listen for custom events from injected script (by selector)
-window.addEventListener('convertToPDFBySelector', function(event) {
-    if (event.detail && event.detail.selector) {
-        const el = document.querySelector(event.detail.selector);
-        if (el) {
-            showNotification('Generating PDF...', 1500);
-            console.log('convertElementToPDF called for selector:', event.detail.selector, el);
-            convertElementToPDF(el);
-        } else {
-            showNotification('Could not find element for PDF', 3000);
-            console.error('Selector not found:', event.detail.selector);
+    if (request.action === 'initiateSelection') {
+        try {
+            startElementSelection();
+            sendResponse({ success: true });
+        } catch (error) {
+            console.error("Error starting selection:", error);
+            sendResponse({ success: false, error: error.message });
         }
+        return true; // Indicates that the response is sent asynchronously
     }
 });
 
@@ -138,56 +126,27 @@ function startElementSelection() {
 
 // Function to convert element to PDF
 function convertElementToPDF(element) {
-    console.log('convertElementToPDF running for element:', element);
+    // console.log('convertElementToPDF running for element:', element); // Removed as per review
+    
+    // Explicitly check for library availability
+    if (!window.html2canvas || !window.jspdf || !window.jspdf.jsPDF) {
+        showNotification('Error: PDF generation library missing. Please try reloading the page or reinstalling the extension.', 5000);
+        console.error('PDF Generation Libraries not found:', {
+            html2canvas: typeof window.html2canvas,
+            jspdf: typeof window.jspdf,
+            jsPDF_constructor: typeof window.jspdf !== 'undefined' ? typeof window.jspdf.jsPDF : 'undefined'
+        });
+        return;
+    }
+
+    const html2canvas = window.html2canvas;
+    const jsPDF = window.jspdf.jsPDF;
+
     // Show loading notification
     const loadingNotification = showNotification('Creating PDF...', 0);
 
-    // Dynamic script loading function
-    function loadScript(src) {
-        return new Promise((resolve, reject) => {
-            // Prevent loading the same script multiple times
-            if (document.querySelector(`script[src="${src}"]`)) {
-                resolve();
-                return;
-            }
-            const script = document.createElement('script');
-            script.src = src;
-            script.onload = resolve;
-            script.onerror = reject;
-            document.head.appendChild(script);
-        });
-    }
-
-    // Load required libraries
-    Promise.all([
-        loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'),
-        loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js')
-    ]).then(() => {
-        // Remove loading notification
-        if (loadingNotification && loadingNotification.parentNode) {
-            loadingNotification.remove();
-        }
-
-        // Wait a tick to ensure libraries are available
-        setTimeout(() => {
-            // Check for html2canvas and jsPDF
-            const html2canvas = window.html2canvas;
-            // Try to get jsPDF constructor from different possible locations
-            let jsPDF = null;
-            if (window.jspdf && window.jspdf.jsPDF) {
-                jsPDF = window.jspdf.jsPDF;
-            } else if (window.jsPDF) {
-                jsPDF = window.jsPDF;
-            }
-
-            if (!html2canvas || !jsPDF) {
-                showNotification('PDF libraries failed to load.', 5000);
-                console.error('html2canvas or jsPDF not found on window:', { html2canvas, jsPDF: window.jspdf });
-                return;
-            }
-
-            html2canvas(element, {
-                scale: 2,
+    html2canvas(element, {
+            scale: 2,
                 useCORS: true,
                 allowTaint: true,
                 backgroundColor: null,
@@ -231,24 +190,18 @@ function convertElementToPDF(element) {
                     showNotification('PDF saved successfully!', 3000);
 
                 } catch (error) {
-                    console.error('Error creating PDF:', error);
-                    showNotification('Error creating PDF: ' + error.message, 5000);
+                    console.error('Error generating PDF document:', error);
+                    showNotification('Error generating PDF document: ' + error.message, 5000);
                 }
             }).catch(error => {
-                console.error('Error capturing element:', error);
-                showNotification('Error capturing element: ' + error.message, 5000);
+                console.error('Error capturing page element with html2canvas:', error);
+                showNotification('Error capturing page element: ' + error.message, 5000);
+            }).finally(() => {
+                // Ensure loading notification is removed in all cases
                 if (loadingNotification && loadingNotification.parentNode) {
                     loadingNotification.remove();
                 }
             });
-        }, 100);
-    }).catch(error => {
-        console.error('Error loading libraries:', error);
-        showNotification('Error loading required libraries', 5000);
-        if (loadingNotification && loadingNotification.parentNode) {
-            loadingNotification.remove();
-        }
-    });
 }
 
 // Save PDF information to Chrome storage
@@ -261,7 +214,7 @@ function savePDFInfo(pdfData) {
         if (chrome.runtime.lastError) {
             console.error('Error saving PDF info:', chrome.runtime.lastError);
         } else {
-            console.log('PDF info saved successfully');
+            // console.log('PDF info saved successfully'); // Removed as per review
         }
     });
 }
