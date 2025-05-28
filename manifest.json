@@ -1,0 +1,44 @@
+{
+    "manifest_version": 3,
+    "name": "Element to PDF",
+    "version": "1.0",
+    "description": "Select HTML elements and save them as PDF files",
+    "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+    "icons": {
+        "16": "icon.svg",
+        "48": "icon.svg",
+        "128": "icon.svg"
+    },
+    "action": {
+         "default_icon": "icon.svg",
+        "default_popup": "popup.html",
+        "default_title": "Element to PDF"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "content.js"
+            ],
+            "css": [
+                "content.css"
+            ]
+        }
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "jspdf.min.js"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
+    ]
+}

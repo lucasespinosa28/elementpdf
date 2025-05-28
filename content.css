@@ -1,0 +1,31 @@
+/* Content styles for element selection */
+
+#element-selector-overlay {
+    transition: all 0.1s ease;
+}
+
+/* Ensure our overlay doesn't interfere with page layout */
+#element-selector-overlay,
+.element-pdf-notification {
+    box-sizing: border-box !important;
+}
+
+/* Prevent text selection during element selection */
+body.element-selection-active {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+/* Smooth transitions for better UX */
+.element-pdf-notification {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.element-pdf-notification.fade-out {
+    opacity: 0;
+    transform: translateX(100%);
+}
