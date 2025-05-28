@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const status = document.getElementById('status');
     const pdfListContainer = document.getElementById('pdfListContainer');
     const pdfCount = document.getElementById('pdfCount');
-    const emptyState = document.getElementById('emptyState');
+    // const emptyState = document.getElementById('emptyState'); // Removed as it's not directly used
     const clearAllBtn = document.getElementById('clearAll');
     const stats = document.getElementById('stats');
     
@@ -15,16 +15,24 @@ document.addEventListener('DOMContentLoaded', function() {
             // Get the active tab
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             
-            // Inject the selection script
-            await chrome.scripting.executeScript({
-                target: { tabId: tab.id },
-                function: startElementSelection
+            // Send a message to the content script to initiate selection
+            chrome.tabs.sendMessage(tab.id, { action: "initiateSelection" }, function(response) {
+                if (chrome.runtime.lastError) {
+                    console.error('Error sending message:', chrome.runtime.lastError.message);
+                    status.textContent = 'Error initiating selection.';
+                    startButton.disabled = false; // Re-enable button if error
+                } else if (response && response.success) {
+                    status.textContent = 'Selection mode active. Click an element on the page.';
+                    // Keep startButton disabled as selection is now active in content script
+                    // The popup will close via setTimeout as before
+                } else {
+                    console.error('Failed to initiate selection in content script.');
+                    status.textContent = 'Failed to start selection.';
+                    startButton.disabled = false; // Re-enable button
+                }
             });
             
-            status.textContent = 'Selection mode active - hover and click elements';
-            startButton.disabled = true;
-            
-            // Close popup after a short delay
+            // Close popup after a short delay - this remains to give user feedback
             setTimeout(() => {
                 window.close();
             }, 1000);
@@ -32,6 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Error:', error);
             status.textContent = 'Error starting selection mode';
+            startButton.disabled = false; // Ensure button is re-enabled on unexpected error
         }
     });
     
@@ -124,134 +133,3 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
-
-// This function will be injected into the page
-function startElementSelection() {
-    // Remove any existing selection mode
-    if (window.elementSelectionActive) {
-        return;
-    }
-    
-    window.elementSelectionActive = true;
-    let hoveredElement = null;
-    
-    // Create overlay for visual feedback
-    const overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.pointerEvents = 'none';
-    overlay.style.border = '2px solid #ff4444';
-    overlay.style.backgroundColor = 'rgba(255, 68, 68, 0.1)';
-    overlay.style.zIndex = '10000';
-    overlay.style.display = 'none';
-    document.body.appendChild(overlay);
-    
-    // Create instruction tooltip
-    const tooltip = document.createElement('div');
-    tooltip.style.cssText = `
-        position: fixed;
-        top: 10px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #333;
-        color: white;
-        padding: 8px 16px;
-        border-radius: 4px;
-        font-size: 14px;
-        z-index: 10001;
-        font-family: Arial, sans-serif;
-    `;
-    tooltip.textContent = 'Hover over elements and click to save as PDF. Press ESC to cancel.';
-    document.body.appendChild(tooltip);
-    
-    // Mouse move handler
-    function handleMouseMove(e) {
-        e.preventDefault();
-        hoveredElement = e.target;
-        
-        // Skip if hovering over our own overlay or tooltip
-        if (hoveredElement === overlay || hoveredElement === tooltip) {
-            return;
-        }
-        
-        const rect = hoveredElement.getBoundingClientRect();
-        overlay.style.display = 'block';
-        overlay.style.left = rect.left + window.scrollX + 'px';
-        overlay.style.top = rect.top + window.scrollY + 'px';
-        overlay.style.width = rect.width + 'px';
-        overlay.style.height = rect.height + 'px';
-    }
-    
-    // Click handler
-    function handleClick(e) {
-        console.log('Element clicked:', hoveredElement);
-        e.preventDefault();
-        e.stopPropagation();
-
-        if (hoveredElement && hoveredElement !== overlay && hoveredElement !== tooltip) {
-            // Always use selector event
-            const selector = getUniqueSelector(hoveredElement);
-            window.dispatchEvent(new CustomEvent('convertToPDFBySelector', { detail: { selector } }));
-        }
-
-        // Clean up
-        cleanup();
-        return false;
-    }
-    
-    // Cleanup function
-    function cleanup() {
-        document.removeEventListener('mousemove', handleMouseMove, true);
-        document.removeEventListener('click', handleClick, true);
-        document.removeEventListener('keydown', handleKeyDown, true);
-        
-        if (overlay && overlay.parentNode) {
-            overlay.remove();
-        }
-        if (tooltip && tooltip.parentNode) {
-            tooltip.remove();
-        }
-        
-        document.body.style.cursor = '';
-        window.elementSelectionActive = false;
-    }
-    
-    // ESC key handler
-    function handleKeyDown(e) {
-        if (e.key === 'Escape') {
-            cleanup();
-        }
-    }
-    
-    // Add event listeners with capture=true to ensure we get them first
-    document.addEventListener('mousemove', handleMouseMove, true);
-    document.addEventListener('click', handleClick, true);
-    document.addEventListener('keydown', handleKeyDown, true);
-    
-    // Change cursor
-    document.body.style.cursor = 'crosshair';
-    
-    // Auto cleanup after 60 seconds
-    setTimeout(cleanup, 60000);
-
-    // Helper to get a unique selector for an element
-    function getUniqueSelector(el) {
-        if (el.id) return `#${el.id}`;
-        if (el === document.body) return 'body';
-        let path = [];
-        while (el && el.nodeType === Node.ELEMENT_NODE && el !== document.body) {
-            let selector = el.nodeName.toLowerCase();
-            if (el.className) {
-                selector += '.' + Array.from(el.classList).join('.');
-            }
-            let sibling = el;
-            let nth = 1;
-            while (sibling = sibling.previousElementSibling) {
-                if (sibling.nodeName === el.nodeName) nth++;
-            }
-            selector += `:nth-of-type(${nth})`;
-            path.unshift(selector);
-            el = el.parentElement;
-        }
-        return path.length ? 'body > ' + path.join(' > ') : 'body';
-    }
-}
